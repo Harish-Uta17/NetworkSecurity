@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timezone
+import os
 from pathlib import Path
 from typing import Dict, List
 
@@ -86,6 +87,13 @@ class ModelService:
                 try:
                     test_arr = load_numpy_array_data(str(test_path))
                     x_test, y_test = test_arr[:, :-1], test_arr[:, -1]
+                    # Computing metrics over the entire test set at every app
+                    # startup is expensive on Streamlit Cloud. A deterministic
+                    # sample is sufficient for the dashboard health metrics.
+                    max_metric_rows = int(os.getenv("MODEL_METRICS_MAX_ROWS", "5000"))
+                    if max_metric_rows > 0 and len(x_test) > max_metric_rows:
+                        sample_indices = np.linspace(0, len(x_test) - 1, max_metric_rows, dtype=int)
+                        x_test, y_test = x_test[sample_indices], y_test[sample_indices]
                     x_test_df = pd.DataFrame(x_test, columns=feature_names)
                     x_transformed = preprocessor.transform(x_test_df)
                     predictions = model.predict(x_transformed)

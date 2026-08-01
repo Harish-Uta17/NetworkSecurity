@@ -80,11 +80,21 @@ if "app" not in sys.modules or not getattr(sys.modules.get("app"), "__path__", N
 _analytics_mod = _load_module_from_path("app.services.analytics", _services_dir / "analytics.py")
 build_threat_statistics = getattr(_analytics_mod, "build_threat_statistics")
 
-_model_mod = _load_module_from_path("app.services.model_service", _services_dir / "model_service.py")
-model_service = getattr(_model_mod, "model_service")
+@st.cache_resource(show_spinner="Loading the detection model...")
+def _get_model_service():
+    module = _load_module_from_path("app.services.model_service", _services_dir / "model_service.py")
+    return getattr(module, "model_service")
 
-_pred_mod = _load_module_from_path("app.services.prediction_store", _services_dir / "prediction_store.py")
-prediction_store = getattr(_pred_mod, "prediction_store")
+
+model_service = _get_model_service()
+
+@st.cache_resource
+def _get_prediction_store():
+    module = _load_module_from_path("app.services.prediction_store", _services_dir / "prediction_store.py")
+    return getattr(module, "prediction_store")
+
+
+prediction_store = _get_prediction_store()
 
 
 CYBER_CSS = """
@@ -131,9 +141,8 @@ body { background: var(--bg); }
 }
 
 [data-testid="stAppViewBlockContainer"], [data-testid="stAppViewContainer"] { width: 100%; min-width: 0; }
-[data-testid="stAppViewBlockContainer"] { display: flex; align-items: stretch; }
-[data-testid="stAppViewContainer"] { flex: 1 1 auto; min-width: 0; }
-[data-testid="stAppViewContainer"] > .main { width: 100%; min-width: 0; flex: 1 1 auto; padding-left: 0; padding-right: 0; }
+[data-testid="stAppViewContainer"] { display: flex !important; flex: 1 1 auto; min-width: 0; visibility: visible !important; opacity: 1 !important; }
+[data-testid="stMain"], [data-testid="stAppViewContainer"] > .main { display: block !important; width: auto; min-width: 0; flex: 1 1 auto; padding-left: 0; padding-right: 0; visibility: visible !important; opacity: 1 !important; }
 
 .block-container {
     padding-top: 1.1rem;
@@ -1540,7 +1549,11 @@ def main() -> None:
         return
 
     selected = st.session_state.get("phishguard-nav", selected)
-    PAGES[selected]()
+    try:
+        PAGES[selected]()
+    except Exception as exc:
+        st.error("The selected dashboard page could not be rendered.")
+        st.exception(exc)
 
 
 if __name__ == "__main__":
