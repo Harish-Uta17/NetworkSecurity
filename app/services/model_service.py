@@ -13,10 +13,15 @@ from app.core.config import get_settings
 from app.core.logging import configure_app_logging
 from app.services.feature_engineering import feature_frame_columns, normalize_feature_payload
 from app.services.threat_scoring import threat_profile
+from app.services.url_analysis import analyze_url, get_url_text_risk_model
 from networksecurity.utils.main_utils.utils import load_numpy_array_data, load_object
 
 
 logger = configure_app_logging()
+
+DECISION_THRESHOLD = 0.52
+HIGH_RISK_THRESHOLD = 0.75
+CRITICAL_RISK_THRESHOLD = 0.9
 
 
 @dataclass
@@ -99,48 +104,97 @@ class ModelService:
     def is_ready(self) -> bool:
         return self._snapshot.model is not None and self._snapshot.preprocessor is not None
 
-    def _build_frame(self, url: str | None, features: Dict[str, float] | None) -> pd.DataFrame:
-        payload = normalize_feature_payload(url=url, features=features)
-        return pd.DataFrame([payload.features], columns=self._snapshot.feature_names)
-
-    def _predict_probability(self, transformed_frame) -> np.ndarray:
+    def _tabular_probability(self, transformed_frame) -> float:
         estimator = self._snapshot.model
-        if estimator is not None and hasattr(estimator, "predict_proba"):
+        if estimator is None:
+            return 0.5
+        if hasattr(estimator, "predict_proba"):
             probabilities = estimator.predict_proba(transformed_frame)
             if probabilities.ndim == 1:
-                return np.stack([1 - probabilities, probabilities], axis=1)
-            return probabilities
-        if estimator is not None and hasattr(estimator, "decision_function"):
-            scores = estimator.decision_function(transformed_frame)
-            normalized = 1 / (1 + np.exp(-np.asarray(scores)))
-            if normalized.ndim == 1:
-                return np.stack([1 - normalized, normalized], axis=1)
-            return normalized
-        return np.full((len(transformed_frame), 2), 0.5)
+                probabilities = np.stack([1 - probabilities, probabilities], axis=1)
+            return float(probabilities[0][0])
+        if hasattr(estimator, "decision_function"):
+            scores = np.asarray(estimator.decision_function(transformed_frame))
+            if scores.ndim > 1:
+                scores = scores.ravel()
+            return float(1 / (1 + np.exp(scores[0])))
+        return 0.5
+
+    def _combine_scores(self, tabular_phish_prob: float, analysis_risk: float, text_risk: float) -> float:
+        combined = max(analysis_risk, text_risk, tabular_phish_prob * 0.85)
+        if analysis_risk >= 0.8 or text_risk >= 0.8:
+            combined = max(combined, 0.9)
+        if analysis_risk >= 0.55 and (analysis_risk >= text_risk or tabular_phish_prob >= 0.45):
+            combined = max(combined, 0.58)
+        return float(min(1.0, max(0.0, combined)))
+
+    def _classify_from_score(self, risk_score: float) -> tuple[int, str]:
+        if risk_score >= DECISION_THRESHOLD:
+            return 0, "High" if risk_score >= HIGH_RISK_THRESHOLD else "Moderate"
+        return 1, "Low" if risk_score >= 0.32 else "Safe"
+
+    def _reason_codes(self, analysis, predicted_label: int, combined_risk: float, text_evidence) -> list[str]:
+        reasons: list[str] = []
+        reasons.extend(analysis.triggered_indicators)
+        if combined_risk >= CRITICAL_RISK_THRESHOLD:
+            reasons.append("combined_risk_critical")
+        elif combined_risk >= HIGH_RISK_THRESHOLD:
+            reasons.append("combined_risk_high")
+        if text_evidence.top_ngrams:
+            reasons.extend([f"tfidf:{ngram}" for ngram in text_evidence.top_ngrams[:5]])
+        if predicted_label == 0 and not reasons:
+            reasons.append("model_phishing_verdict")
+        deduped: list[str] = []
+        for reason in reasons:
+            if reason not in deduped:
+                deduped.append(reason)
+        return deduped
 
     def predict(self, url: str | None = None, features: Dict[str, float] | None = None, source: str = "api") -> Dict:
         if not self.is_ready:
             raise RuntimeError("Model artifacts are not available. Train the model before predicting.")
 
-        input_frame = self._build_frame(url=url, features=features)
+        payload = normalize_feature_payload(url=url, features=features)
+        analysis = analyze_url(payload.url)
+        text_evidence = get_url_text_risk_model().score(payload.url)
+        input_frame = pd.DataFrame([payload.features], columns=self._snapshot.feature_names)
         transformed_frame = self._snapshot.preprocessor.transform(input_frame)
-        predictions = self._snapshot.model.predict(transformed_frame)
-        probabilities = self._predict_probability(transformed_frame)
-
-        predicted_label = int(predictions[0])
-        confidence = float(probabilities[0][predicted_label])
-        threat_level, risk_category, score = threat_profile(prediction=predicted_label, confidence=confidence)
+        tabular_phish_prob = self._tabular_probability(transformed_frame)
+        combined_risk = self._combine_scores(tabular_phish_prob, analysis.risk_score, text_evidence.score)
+        predicted_label, risk_category = self._classify_from_score(combined_risk)
+        confidence = combined_risk if predicted_label == 0 else 1.0 - combined_risk
+        threat_level, _, score = threat_profile(prediction=predicted_label, confidence=combined_risk)
         prediction_label = "Legitimate" if predicted_label == 1 else "Phishing"
+        reason_codes = self._reason_codes(analysis, predicted_label, combined_risk, text_evidence)
 
         return {
             "url": url or "feature-input",
             "prediction": prediction_label,
-            "confidence_score": round(confidence, 4),
+            "confidence_score": round(float(confidence), 4),
             "threat_level": threat_level,
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "risk_category": risk_category,
             "score": round(float(score), 4),
             "source": source,
+            "reason_codes": reason_codes,
+            "heuristic_score": round(float(analysis.risk_score), 4),
+            "risk_score": round(float(combined_risk), 4),
+            "decision_threshold": DECISION_THRESHOLD,
+            "triggered_indicators": analysis.triggered_indicators,
+            "suspicious_keywords": analysis.suspicious_terms,
+            "brand_hits": analysis.brand_hits,
+            "explanation": analysis.explanation,
+            "risk_score_breakdown": {
+                **analysis.risk_breakdown,
+                "tabular_phishing_probability": round(float(tabular_phish_prob), 4),
+                "text_ngram_risk": round(float(text_evidence.score), 4),
+            },
+            "feature_contribution_breakdown": analysis.feature_contributions,
+            "text_evidence": {
+                "malicious_similarity": text_evidence.malicious_similarity,
+                "benign_similarity": text_evidence.benign_similarity,
+                "top_ngrams": text_evidence.top_ngrams,
+            },
         }
 
     def predict_dataframe(self, dataframe: pd.DataFrame, source: str = "batch") -> pd.DataFrame:
@@ -156,24 +210,46 @@ class ModelService:
 
         input_frame = dataframe.reindex(columns=feature_names, fill_value=0)
         transformed_frame = self._snapshot.preprocessor.transform(input_frame)
-        predictions = self._snapshot.model.predict(transformed_frame)
-        probabilities = self._predict_probability(transformed_frame)
 
         records = []
         for position, (_, row) in enumerate(dataframe.iterrows()):
-            predicted_label = int(predictions[position])
-            confidence = float(probabilities[position][predicted_label])
-            threat_level, risk_category, score = threat_profile(prediction=predicted_label, confidence=confidence)
+            payload_url = str(row.get("url", row.get("URL", f"row-{position}")))
+            analysis = analyze_url(payload_url if payload_url else "feature-input")
+            text_evidence = get_url_text_risk_model().score(payload_url if payload_url else "feature-input")
+            tabular_phish_prob = self._tabular_probability(transformed_frame[position : position + 1])
+            combined_risk = self._combine_scores(tabular_phish_prob, analysis.risk_score, text_evidence.score)
+            predicted_label, risk_category = self._classify_from_score(combined_risk)
+            confidence = combined_risk if predicted_label == 0 else 1.0 - combined_risk
+            threat_level, _, score = threat_profile(prediction=predicted_label, confidence=combined_risk)
             records.append(
                 {
-                    "url": str(row.get("url", row.get("URL", f"row-{position}"))),
+                    "url": payload_url,
                     "prediction": "Legitimate" if predicted_label == 1 else "Phishing",
-                    "confidence_score": round(confidence, 4),
+                    "confidence_score": round(float(confidence), 4),
                     "threat_level": threat_level,
                     "timestamp": datetime.now(timezone.utc).isoformat(),
                     "risk_category": risk_category,
                     "score": round(float(score), 4),
                     "source": source,
+                    "reason_codes": self._reason_codes(analysis, predicted_label, combined_risk, text_evidence),
+                    "heuristic_score": round(float(analysis.risk_score), 4),
+                    "risk_score": round(float(combined_risk), 4),
+                    "decision_threshold": DECISION_THRESHOLD,
+                    "triggered_indicators": analysis.triggered_indicators,
+                    "suspicious_keywords": analysis.suspicious_terms,
+                    "brand_hits": analysis.brand_hits,
+                    "explanation": analysis.explanation,
+                    "risk_score_breakdown": {
+                        **analysis.risk_breakdown,
+                        "tabular_phishing_probability": round(float(tabular_phish_prob), 4),
+                        "text_ngram_risk": round(float(text_evidence.score), 4),
+                    },
+                    "feature_contribution_breakdown": analysis.feature_contributions,
+                    "text_evidence": {
+                        "malicious_similarity": text_evidence.malicious_similarity,
+                        "benign_similarity": text_evidence.benign_similarity,
+                        "top_ngrams": text_evidence.top_ngrams,
+                    },
                 }
             )
 
@@ -188,6 +264,8 @@ class ModelService:
             "feature_count": len(snapshot.feature_names),
             "trained_artifact_dir": snapshot.latest_artifact_dir,
             "metrics": snapshot.metrics,
+            "decision_threshold": DECISION_THRESHOLD,
+            "hybrid_detection": True,
         }
 
     def get_health_snapshot(self) -> Dict:

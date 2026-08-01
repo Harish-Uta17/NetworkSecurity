@@ -21,6 +21,17 @@ class PredictionRecord(BaseModel):
     risk_category: str
     score: float
     source: str = "api"
+    reason_codes: List[str] = Field(default_factory=list)
+    heuristic_score: float = 0.0
+    risk_score: float = 0.0
+    decision_threshold: float = 0.52
+    triggered_indicators: List[str] = Field(default_factory=list)
+    suspicious_keywords: List[str] = Field(default_factory=list)
+    brand_hits: List[str] = Field(default_factory=list)
+    explanation: str = ""
+    risk_score_breakdown: Dict[str, float] = Field(default_factory=dict)
+    feature_contribution_breakdown: List[Dict[str, float | str]] = Field(default_factory=list)
+    text_evidence: Dict[str, object] = Field(default_factory=dict)
 
 
 class BatchPredictionSummary(BaseModel):
@@ -42,6 +53,8 @@ class ModelInfoResponse(BaseModel):
     feature_count: int
     trained_artifact_dir: Optional[str] = None
     metrics: Dict[str, float] = Field(default_factory=dict)
+    decision_threshold: float = 0.52
+    hybrid_detection: bool = True
 
 
 class ThreatStatsResponse(BaseModel):
@@ -57,5 +70,6 @@ class HealthResponse(BaseModel):
     status: str
     environment: str
     model_ready: bool
+    history_backend: str
     timestamp: datetime
     uptime_seconds: float

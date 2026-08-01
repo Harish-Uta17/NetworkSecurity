@@ -1,11 +1,58 @@
-venv
+# Virtual Environments
+venv/
+.venv/
+ENV/
+
+# Sensitive Information
 .env
+
+# Python Cache & Compiled Files
 __pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Data Science Artifacts & Trained Models
+Artifacts/
+final_model/
 uploads/
 logs/
-.streamlit/
+reports/
+
+# MLflow Tracking Data
+mlruns/
+mlruns.db
+
+# Database Files
 *.sqlite
 *.db
 *.db-journal
-*.pyc
 
+# Streamlit & Web Configs
+.streamlit/
+
+# IDE / Editor Files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS Generated Files
+.DS_Store
+Thumbs.db

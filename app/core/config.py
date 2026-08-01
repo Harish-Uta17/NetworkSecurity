@@ -21,7 +21,7 @@ class AppSettings:
     artifacts_dir: Path = PROJECT_ROOT / "Artifacts"
     uploads_dir: Path = PROJECT_ROOT / "uploads"
     logs_dir: Path = PROJECT_ROOT / "logs"
-    history_file: Path = PROJECT_ROOT / "logs" / "prediction_history.jsonl"
+    history_file: Path = Path(os.getenv("PREDICTION_HISTORY_FILE", str(PROJECT_ROOT / "logs" / "prediction_history.jsonl")))
     max_upload_mb: int = int(os.getenv("MAX_UPLOAD_MB", "10"))
     swagger_theme: str = os.getenv("SWAGGER_THEME", "dark")
 

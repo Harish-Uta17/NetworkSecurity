@@ -61,9 +61,13 @@ Create a local `.env` file when needed:
 
 ```env
 MONGO_DB_URL=your_mongodb_connection_string
+API_BASE_URL=http://127.0.0.1:8000/api/v1
+PREDICTION_HISTORY_FILE=logs/prediction_history.jsonl
 APP_ENV=development
 MAX_UPLOAD_MB=10
 ```
+
+For hosted deployments, prefer `MONGO_DB_URL` so prediction history survives restarts and is shared across the API and dashboard.
 
 Do not commit `.env` or secrets to GitHub.
 
@@ -224,6 +228,8 @@ The default production command is:
 ```text
 uvicorn app.main:app --host 0.0.0.0 --port $PORT
 ```
+
+If you deploy the Streamlit dashboard separately from the FastAPI backend, set `API_BASE_URL` so the dashboard reads threat stats and history from the API instead of its local fallback store. For persistent history across restarts, configure `MONGO_DB_URL` so the prediction store can use MongoDB.
 
 ## Git Hygiene
 

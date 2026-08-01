@@ -1,4 +1,4 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Query
 
 from app.schemas.prediction import PredictionRecord, ThreatStatsResponse
 from app.services.analytics import build_threat_statistics
@@ -20,3 +20,9 @@ async def threat_stats() -> ThreatStatsResponse:
         by_risk_category=payload["by_risk_category"],
         recent_predictions=[PredictionRecord(**record) for record in history[-10:]],
     )
+
+
+@router.get("/history", response_model=list[PredictionRecord])
+async def prediction_history(limit: int = Query(default=200, ge=1, le=2000)) -> list[PredictionRecord]:
+    history = prediction_store.load(limit=limit)
+    return [PredictionRecord(**record) for record in history]
