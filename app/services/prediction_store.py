@@ -29,7 +29,15 @@ class PredictionStore:
 
         if self.mongo_uri and MongoClient is not None:
             try:
-                client = MongoClient(self.mongo_uri)
+                client = MongoClient(
+                    self.mongo_uri,
+                    serverSelectionTimeoutMS=3000,
+                    connectTimeoutMS=3000,
+                    socketTimeoutMS=5000,
+                )
+                # MongoClient connects lazily. Ping once at startup so an
+                # unreachable Atlas instance does not stall every read/write.
+                client.admin.command("ping")
                 self._mongo_collection = client[self.mongo_database][self.mongo_collection]
             except Exception:
                 self._mongo_collection = None
@@ -55,7 +63,7 @@ class PredictionStore:
                 try:
                     self._mongo_collection.insert_one(payload)
                 except Exception:
-                    pass
+                    self._mongo_collection = None
             with self.path.open("a", encoding="utf-8") as handle:
                 handle.write(json.dumps(payload, default=str) + "\n")
 
@@ -68,7 +76,7 @@ class PredictionStore:
                 rows = list(cursor)
                 return list(reversed(rows))
             except Exception:
-                pass
+                self._mongo_collection = None
 
         if not self.path.exists():
             return []

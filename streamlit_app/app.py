@@ -681,6 +681,7 @@ def render_sidebar() -> str:
         st.markdown("<div class='thin-divider'></div>", unsafe_allow_html=True)
         st.markdown('<div class="nav-hint">Reload latest scans and model status.</div>', unsafe_allow_html=True)
         if st.button("Refresh data", use_container_width=True):
+            st.cache_data.clear()
             st.rerun()
     return selected
 
@@ -777,8 +778,18 @@ class DashboardClient:
 client = DashboardClient()
 
 
+@st.cache_data(ttl=30, show_spinner=False)
+def _cached_history(limit: int = 300) -> List[Dict]:
+    return client.recent_history(limit=limit)
+
+
+@st.cache_data(ttl=30, show_spinner=False)
+def _cached_threat_stats() -> Dict:
+    return client.threat_stats()
+
+
 def render_executive() -> None:
-    stats = client.threat_stats()
+    stats = _cached_threat_stats()
     info = client.model_info()
     health = client.health()
     active_section = st.session_state.get("active_section")
@@ -1268,7 +1279,7 @@ def render_threat_analytics(embedded: bool = False) -> None:
             show_metrics=False,
         )
     render_section_header("Threat Analytics", "Historical detections and risk clusters across the collected dataset.", anchor_id="threat-analytics")
-    history = client.recent_history(limit=300)
+    history = _cached_history(300)
     if not history:
         st.markdown('<div class="empty-card">No prediction history available yet.</div>', unsafe_allow_html=True)
         return
