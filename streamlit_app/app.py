@@ -711,6 +711,8 @@ class DashboardClient:
         if remote:
             return remote
         data = model_service.get_health_snapshot()
+        data["history_backend"] = prediction_store.backend_name
+        data["history_error"] = prediction_store.mongo_error
         data["timestamp"] = datetime.now(timezone.utc).isoformat()
         return data
 

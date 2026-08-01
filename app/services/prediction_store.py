@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections import Counter
 from datetime import datetime
 import json
+import logging
 import os
 from pathlib import Path
 from threading import Lock
@@ -15,6 +16,8 @@ except Exception:  # pragma: no cover - optional dependency in some deployments
 
 from app.core.config import get_settings
 
+logger = logging.getLogger(__name__)
+
 
 class PredictionStore:
     def __init__(self) -> None:
@@ -26,6 +29,7 @@ class PredictionStore:
         self.mongo_database = os.getenv("PREDICTION_HISTORY_DB", "networksecurity")
         self.mongo_collection = os.getenv("PREDICTION_HISTORY_COLLECTION", "prediction_history")
         self._mongo_collection = None
+        self.mongo_error: str | None = None
 
         if self.mongo_uri and MongoClient is not None:
             try:
@@ -39,8 +43,10 @@ class PredictionStore:
                 # unreachable Atlas instance does not stall every read/write.
                 client.admin.command("ping")
                 self._mongo_collection = client[self.mongo_database][self.mongo_collection]
-            except Exception:
+            except Exception as exc:
                 self._mongo_collection = None
+                self.mongo_error = f"{type(exc).__name__}: {exc}"
+                logger.warning("Mongo connection failed; using file storage: %s", self.mongo_error)
 
     @property
     def backend_name(self) -> str:
@@ -62,8 +68,10 @@ class PredictionStore:
             if self._mongo_collection is not None:
                 try:
                     self._mongo_collection.insert_one(payload)
-                except Exception:
+                except Exception as exc:
                     self._mongo_collection = None
+                    self.mongo_error = f"{type(exc).__name__}: {exc}"
+                    logger.warning(self.mongo_error)
             with self.path.open("a", encoding="utf-8") as handle:
                 handle.write(json.dumps(payload, default=str) + "\n")
 
@@ -75,8 +83,10 @@ class PredictionStore:
                     cursor = cursor.limit(limit)
                 rows = list(cursor)
                 return list(reversed(rows))
-            except Exception:
+            except Exception as exc:
                 self._mongo_collection = None
+                self.mongo_error = f"{type(exc).__name__}: {exc}"
+                logger.warning("Mongo history read failed; switched to file storage: %s", self.mongo_error)
 
         if not self.path.exists():
             return []
