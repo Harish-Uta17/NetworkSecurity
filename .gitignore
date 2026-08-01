@@ -28,9 +28,8 @@ wheels/
 .installed.cfg
 *.egg
 
-# Data Science Artifacts & Trained Models
+# Data Science Artifacts & Log Data (final_model/ is un-ignored so models go to GitHub)
 Artifacts/
-final_model/
 uploads/
 logs/
 reports/
