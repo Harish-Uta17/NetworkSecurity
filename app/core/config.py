@@ -17,7 +17,8 @@ class AppSettings:
     )
     environment: str = os.getenv("APP_ENV", "development")
     api_prefix: str = "/api/v1"
-    model_dir: Path = PROJECT_ROOT / "final_model"
+    # Override this when the app is run outside the repository layout.
+    model_dir: Path = Path(os.getenv("MODEL_DIR", str(PROJECT_ROOT / "final_model")))
     artifacts_dir: Path = PROJECT_ROOT / "Artifacts"
     uploads_dir: Path = PROJECT_ROOT / "uploads"
     logs_dir: Path = PROJECT_ROOT / "logs"

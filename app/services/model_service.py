@@ -31,6 +31,7 @@ class ModelSnapshot:
     metrics: Dict[str, float]
     latest_artifact_dir: str | None
     feature_names: List[str]
+    load_error: str | None = None
 
 
 class ModelService:
@@ -50,14 +51,26 @@ class ModelService:
         metrics: Dict[str, float] = {}
         feature_names = feature_frame_columns()
         latest_artifact_dir = self._latest_artifact_dir()
+        load_error: str | None = None
 
         try:
-            if self.settings.preprocessor_path.exists():
+            missing = [
+                str(path)
+                for path in (self.settings.model_path, self.settings.preprocessor_path)
+                if not path.is_file()
+            ]
+            if missing:
+                load_error = "Missing model artifact file(s): " + ", ".join(missing)
+            else:
                 preprocessor = load_object(str(self.settings.preprocessor_path))
-            if self.settings.model_path.exists():
                 model = load_object(str(self.settings.model_path))
         except Exception as exc:
-            logger.warning("Failed to load model artifacts: %s", exc)
+            load_error = f"{type(exc).__name__}: {exc}"
+            logger.exception(
+                "Failed to load model artifacts from %s. Check that files are deployed "
+                "and dependency versions match.",
+                self.settings.model_dir,
+            )
 
         if latest_artifact_dir:
             test_path = latest_artifact_dir / "data_transformation" / "transformed" / "test.npy"
@@ -98,6 +111,7 @@ class ModelService:
             metrics=metrics,
             latest_artifact_dir=str(latest_artifact_dir) if latest_artifact_dir else None,
             feature_names=feature_names,
+            load_error=load_error,
         )
 
     @property
@@ -152,7 +166,11 @@ class ModelService:
 
     def predict(self, url: str | None = None, features: Dict[str, float] | None = None, source: str = "api") -> Dict:
         if not self.is_ready:
-            raise RuntimeError("Model artifacts are not available. Train the model before predicting.")
+            detail = self._snapshot.load_error or "The model and preprocessor could not be loaded."
+            raise RuntimeError(
+                "Model artifacts are unavailable. Deploy final_model/model.pkl and "
+                f"final_model/preprocessor.pkl, then restart the app. Details: {detail}"
+            )
 
         payload = normalize_feature_payload(url=url, features=features)
         analysis = analyze_url(payload.url)
@@ -266,6 +284,8 @@ class ModelService:
             "metrics": snapshot.metrics,
             "decision_threshold": DECISION_THRESHOLD,
             "hybrid_detection": True,
+            "model_ready": self.is_ready,
+            "load_error": snapshot.load_error,
         }
 
     def get_health_snapshot(self) -> Dict:

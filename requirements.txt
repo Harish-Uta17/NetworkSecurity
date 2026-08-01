@@ -4,7 +4,8 @@ numpy
 pymongo[srv]==4.8.0
 certifi
 dnspython
-scikit-learn
+# Keep these versions aligned with the serialized artifacts in final_model/.
+scikit-learn==1.8.0
 pyaml
 mlflow
 dagshub

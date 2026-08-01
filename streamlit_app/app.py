@@ -955,7 +955,16 @@ def render_real_time(embedded: bool = False) -> None:
                     status.write("Inspecting credential harvesting and redirect patterns…")
                     time.sleep(0.12)
                     progress.progress(66, text="Generating AI verdict")
-                    result = client.predict_url(url)
+                    try:
+                        result = client.predict_url(url)
+                    except RuntimeError as exc:
+                        status.update(label="Model unavailable", state="error")
+                        st.error(str(exc))
+                        st.info(
+                            "If this is Streamlit Cloud, confirm that the latest commit includes "
+                            "final_model/model.pkl and final_model/preprocessor.pkl, then reboot the app."
+                        )
+                        return
                     time.sleep(0.12)
                     progress.progress(100, text="Scan complete")
                     status.update(label="Analysis complete", state="complete")
