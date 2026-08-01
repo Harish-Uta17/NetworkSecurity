@@ -36,6 +36,20 @@ def _load_module_from_path(mod_name: str, path: Path):
     return module
 
 
+def _load_streamlit_secrets_into_environment() -> None:
+    """Make Streamlit Cloud secrets available to the shared service layer."""
+    try:
+        for key in ("MONGO_DB_URL", "PREDICTION_HISTORY_DB", "PREDICTION_HISTORY_COLLECTION"):
+            if key not in os.environ and key in st.secrets:
+                os.environ[key] = str(st.secrets[key])
+    except Exception:
+        # Local runs without .streamlit/secrets.toml should continue normally.
+        pass
+
+
+_load_streamlit_secrets_into_environment()
+
+
 APP_NAME = "PhishGuard AI"
 APP_TAGLINE = "AI-powered phishing URL detection and cyber threat intelligence"
 LOCAL_TIMEZONE = ZoneInfo(os.getenv("APP_TIMEZONE", "Asia/Kolkata"))
@@ -91,6 +105,13 @@ CYBER_CSS = """
     --text: #eaf3ff;
     --muted: #8da4c0;
     --shadow: 0 24px 72px rgba(0, 0, 0, 0.34);
+    /* consistent scale so spacing/rounding is uniform everywhere */
+    --r-sm: 12px;
+    --r-md: 16px;
+    --r-lg: 20px;
+    --r-xl: 24px;
+    --pad-card: 1.15rem;
+    --gap: 0.9rem;
 }
 
 html, body, [class*="css"] {
@@ -98,7 +119,6 @@ html, body, [class*="css"] {
 }
 
 html, body { overflow-x: hidden; }
-
 body { background: var(--bg); }
 
 .stApp {
@@ -116,12 +136,13 @@ body { background: var(--bg); }
 [data-testid="stAppViewContainer"] > .main { width: 100%; min-width: 0; flex: 1 1 auto; padding-left: 0; padding-right: 0; }
 
 .block-container {
-    padding-top: 1rem;
-    padding-bottom: 2rem;
-    max-width: none;
+    padding-top: 1.1rem;
+    padding-bottom: 2.2rem;
+    max-width: 1480px;
+    margin: 0 auto;
     width: 100%;
-    padding-left: clamp(1rem, 1.8vw, 1.9rem);
-    padding-right: clamp(1rem, 1.8vw, 1.9rem);
+    padding-left: clamp(1rem, 1.8vw, 2rem);
+    padding-right: clamp(1rem, 1.8vw, 2rem);
 }
 
 [data-testid="stSidebar"] {
@@ -151,7 +172,6 @@ body { background: var(--bg); }
 [data-testid="stSidebarContent"] { padding-top: 0.9rem; }
 .stSidebar { background: linear-gradient(180deg, rgba(7, 14, 26, 0.98), rgba(5, 9, 17, 0.98)); }
 
-/* Remove Streamlit's deploy/menu chrome while keeping sidebar controls usable. */
 #MainMenu,
 [data-testid="stDecoration"],
 [data-testid="stStatusWidget"],
@@ -160,9 +180,7 @@ body { background: var(--bg); }
     visibility: hidden !important;
 }
 
-[data-testid="stHeader"] {
-    background: transparent !important;
-}
+[data-testid="stHeader"] { background: transparent !important; }
 
 [data-testid="stToolbar"] { right: clamp(1rem, 1.8vw, 1.9rem); }
 [data-testid="stToolbar"] [data-testid="stDeployButton"],
@@ -182,14 +200,18 @@ body { background: var(--bg); }
     z-index: 1002 !important;
 }
 
-div[data-testid="stHorizontalBlock"] { gap: 0.95rem; align-items: stretch; }
+/* Equal-height columns + consistent gaps everywhere */
+div[data-testid="stHorizontalBlock"] { gap: var(--gap); align-items: stretch; }
 div[data-testid="column"], div[data-testid="stColumn"] { display: flex; }
-div[data-testid="column"] > div, div[data-testid="stColumn"] > div { width: 100%; }
+div[data-testid="column"] > div, div[data-testid="stColumn"] > div { width: 100%; display: flex; flex-direction: column; }
+/* make direct card children fill the column height so rows line up */
+div[data-testid="column"] > div > [class$="-card"],
+div[data-testid="stColumn"] > div > [class$="-card"] { height: 100%; }
 
 .sidebar-shell {
     border: 1px solid rgba(45, 255, 243, 0.12);
-    border-radius: 22px;
-    padding: 1rem 1.05rem;
+    border-radius: var(--r-xl);
+    padding: 1.05rem 1.1rem;
     background: linear-gradient(180deg, rgba(10, 20, 36, 0.96), rgba(7, 13, 24, 0.96));
     box-shadow: var(--shadow);
 }
@@ -198,10 +220,10 @@ div[data-testid="column"] > div, div[data-testid="stColumn"] > div { width: 100%
 .brand-mark {
     width: 42px; height: 42px; display: inline-flex; align-items: center; justify-content: center;
     border-radius: 14px; background: linear-gradient(135deg, rgba(39, 245, 238, 0.2), rgba(109, 124, 255, 0.22));
-    border: 1px solid rgba(45, 255, 243, 0.24); box-shadow: 0 10px 24px rgba(39, 245, 238, 0.12); font-size: 1.15rem;
+    border: 1px solid rgba(45, 255, 243, 0.24); box-shadow: 0 10px 24px rgba(39, 245, 238, 0.12); font-size: 1.15rem; flex: 0 0 42px;
 }
 .brand-kicker { color: var(--accent); text-transform: uppercase; letter-spacing: 0.22em; font-size: 0.72rem; font-weight: 800; }
-.brand-title { color: var(--text); font-size: 1.32rem; font-weight: 800; margin-top: 0.25rem; }
+.brand-title { color: var(--text); font-size: 1.28rem; font-weight: 800; margin-top: 0.25rem; line-height: 1.2; }
 .brand-subtitle { color: var(--muted); font-size: 0.86rem; line-height: 1.45; margin-top: 0.35rem; }
 .brand-description { color: var(--muted); font-size: 0.82rem; line-height: 1.55; margin-top: 0.55rem; }
 .brand-description strong { color: var(--text); }
@@ -234,16 +256,16 @@ div[data-testid="column"] > div, div[data-testid="stColumn"] > div { width: 100%
 .surface-card {
     background: linear-gradient(180deg, rgba(13, 26, 45, 0.94), rgba(8, 16, 31, 0.94));
     border: 1px solid rgba(45, 255, 243, 0.12);
-    border-radius: 24px;
+    border-radius: var(--r-xl);
     box-shadow: var(--shadow);
 }
 
-.hero-card { padding: 1.45rem 1.55rem; position: relative; overflow: hidden; margin-bottom: 1rem; }
+.hero-card { padding: 1.5rem 1.6rem; position: relative; overflow: hidden; margin-bottom: 1.1rem; }
 .hero-card:before { content: ""; position: absolute; inset: 0; background: radial-gradient(circle at top right, rgba(39, 245, 238, 0.12), transparent 34%); pointer-events: none; }
-.hero-stack { position: relative; z-index: 1; display: flex; justify-content: space-between; gap: 1rem; flex-wrap: wrap; align-items: end; }
+.hero-stack { position: relative; z-index: 1; display: flex; justify-content: space-between; gap: 1.1rem; flex-wrap: wrap; align-items: flex-start; }
 .hero-copy { max-width: 72ch; }
 .eyebrow { color: var(--accent); text-transform: uppercase; letter-spacing: 0.2em; font-size: 0.72rem; font-weight: 800; }
-.hero-title { margin: 0.25rem 0 0.35rem; font-size: clamp(1.8rem, 3vw, 2.75rem); line-height: 1.02; color: var(--text); font-weight: 850; }
+.hero-title { margin: 0.3rem 0 0.4rem; font-size: clamp(1.8rem, 3vw, 2.7rem); line-height: 1.05; color: var(--text); font-weight: 850; }
 .hero-subtitle { color: var(--muted); max-width: 64ch; line-height: 1.6; font-size: 1.02rem; }
 .hero-description { color: #c9d7ea; font-size: 0.96rem; line-height: 1.7; max-width: 68ch; margin-top: 0.9rem; }
 .hero-description strong { color: var(--text); }
@@ -253,161 +275,86 @@ div[data-testid="column"] > div, div[data-testid="stColumn"] > div { width: 100%
 .hero-cta.primary { color: #03101d; background: linear-gradient(90deg, #27f5ee, #6d7cff); box-shadow: 0 16px 30px rgba(39, 245, 238, 0.16); }
 .hero-cta.secondary { color: var(--text); background: rgba(14, 25, 43, 0.84); }
 .hero-cta:hover { transform: translateY(-1px); border-color: rgba(45, 255, 243, 0.26); }
-.status-row { display: flex; gap: 0.5rem; flex-wrap: wrap; justify-content: flex-end; }
-.hero-metrics { position: relative; z-index: 1; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.7rem; margin-top: 1rem; }
-.hero-metric { border: 1px solid rgba(45, 255, 243, 0.12); border-radius: 16px; padding: 0.8rem 0.9rem; background: rgba(11, 22, 40, 0.72); }
+.status-row { display: flex; gap: 0.5rem; flex-wrap: wrap; justify-content: flex-end; align-items: center; }
+.hero-metrics { position: relative; z-index: 1; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.7rem; margin-top: 1.1rem; }
+.hero-metric { border: 1px solid rgba(45, 255, 243, 0.12); border-radius: var(--r-md); padding: 0.85rem 0.9rem; background: rgba(11, 22, 40, 0.72); display: flex; flex-direction: column; }
 .hero-metric-label { color: var(--muted); font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.12em; font-weight: 800; }
 .hero-metric-value { color: var(--text); margin-top: 0.35rem; font-size: 1.15rem; font-weight: 850; }
-.hero-metric-note { color: var(--muted); margin-top: 0.15rem; font-size: 0.8rem; }
+.hero-metric-note { color: var(--muted); margin-top: auto; padding-top: 0.15rem; font-size: 0.8rem; }
+
 .pill,
 .severity-pill,
-.status-pill { display: inline-flex; align-items: center; gap: 0.45rem; border-radius: 999px; padding: 0.45rem 0.8rem; font-size: 0.8rem; font-weight: 700; border: 1px solid rgba(45, 255, 243, 0.14); }
+.status-pill { display: inline-flex; align-items: center; gap: 0.45rem; border-radius: 999px; padding: 0.45rem 0.8rem; font-size: 0.8rem; font-weight: 700; border: 1px solid rgba(45, 255, 243, 0.14); line-height: 1; }
 .pill { background: rgba(39, 245, 238, 0.08); color: #a8ffff; }
 .pill.good { background: rgba(16, 185, 129, 0.12); color: #8ff0c7; }
 .pill.warn { background: rgba(245, 158, 11, 0.12); color: #f8cd76; }
 .pill.danger { background: rgba(255, 77, 109, 0.14); color: #ffb0bf; }
 .analysis-time { margin: 0.2rem 0 0.85rem; }
 .analysis-time .pill { font-size: 0.86rem; padding: 0.5rem 0.95rem; }
-.section-head { display: flex; align-items: end; justify-content: space-between; gap: 1rem; margin: 0.35rem 0 1rem; flex-wrap: wrap; }
-.section-title { margin: 0; font-size: 1.15rem; font-weight: 750; color: var(--text); }
-.section-subtitle { color: var(--muted); font-size: 0.9rem; margin-top: 0.25rem; }
-.kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 0.85rem; align-items: stretch; }
-.kpi-card { min-height: 120px; background: linear-gradient(180deg, rgba(13, 27, 45, 0.96), rgba(7, 15, 28, 0.96)); border: 1px solid rgba(45, 255, 243, 0.13); border-radius: 20px; padding: 1rem 1rem 0.95rem; box-shadow: 0 16px 42px rgba(0, 0, 0, 0.28); transition: transform 150ms ease, border-color 150ms ease, box-shadow 150ms ease; height: 100%; }
+
+.section-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 1rem; margin: 0.5rem 0 1rem; flex-wrap: wrap; }
+.section-title { margin: 0; font-size: 1.18rem; font-weight: 750; color: var(--text); line-height: 1.2; }
+.section-subtitle { color: var(--muted); font-size: 0.9rem; margin-top: 0.3rem; line-height: 1.4; }
+
+.kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: var(--gap); align-items: stretch; }
+.kpi-card { display: flex; flex-direction: column; min-height: 128px; background: linear-gradient(180deg, rgba(13, 27, 45, 0.96), rgba(7, 15, 28, 0.96)); border: 1px solid rgba(45, 255, 243, 0.13); border-radius: var(--r-lg); padding: 1.05rem; box-shadow: 0 16px 42px rgba(0, 0, 0, 0.28); transition: transform 150ms ease, border-color 150ms ease, box-shadow 150ms ease; height: 100%; }
 .kpi-card:hover { transform: translateY(-2px); border-color: rgba(45, 255, 243, 0.28); box-shadow: 0 22px 54px rgba(0, 0, 0, 0.34); }
-.kpi-top { display: flex; justify-content: space-between; align-items: start; gap: 0.75rem; }
-.kpi-icon { width: 40px; height: 40px; border-radius: 12px; display: inline-flex; align-items: center; justify-content: center; background: rgba(39, 245, 238, 0.10); border: 1px solid rgba(39, 245, 238, 0.18); font-size: 1rem; }
+.kpi-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 0.75rem; }
+.kpi-icon { width: 40px; height: 40px; border-radius: 12px; display: inline-flex; align-items: center; justify-content: center; background: rgba(39, 245, 238, 0.10); border: 1px solid rgba(39, 245, 238, 0.18); font-size: 1rem; flex: 0 0 40px; }
 .kpi-label { margin-top: 0.85rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.14em; font-size: 0.7rem; font-weight: 800; }
-.kpi-value { margin-top: 0.4rem; color: var(--text); font-size: clamp(1.65rem, 2.2vw, 2.25rem); font-weight: 850; line-height: 1; }
+.kpi-value { margin-top: 0.4rem; color: var(--text); font-size: clamp(1.6rem, 2.2vw, 2.2rem); font-weight: 850; line-height: 1.02; }
 .kpi-value.compact { font-size: clamp(1.25rem, 1.5vw, 1.55rem); line-height: 1.18; }
-.kpi-note { margin-top: 0.35rem; color: var(--muted); font-size: 0.84rem; line-height: 1.45; }
-.panel-card, .insight-card, .empty-card, .surface-card { padding: 1.1rem; }
+.kpi-note { margin-top: auto; padding-top: 0.4rem; color: var(--muted); font-size: 0.84rem; line-height: 1.45; }
+
+.panel-card, .insight-card, .empty-card, .surface-card { padding: var(--pad-card); display: flex; flex-direction: column; }
 .panel-card, .insight-card, .empty-card, .surface-card, .score-card { transition: transform 150ms ease, border-color 150ms ease, box-shadow 150ms ease; }
 .panel-card:hover, .insight-card:hover, .empty-card:hover, .surface-card:hover, .score-card:hover { transform: translateY(-1px); border-color: rgba(45, 255, 243, 0.22); box-shadow: 0 18px 36px rgba(0, 0, 0, 0.20); }
-.panel-card + .panel-card { margin-top: 0.9rem; }
-.panel-title { margin: 0 0 0.25rem; color: var(--text); font-size: 1.02rem; font-weight: 750; }
-.panel-subtitle { color: var(--muted); font-size: 0.86rem; margin-bottom: 0.85rem; }
+.panel-card + .panel-card { margin-top: var(--gap); }
+.panel-title { margin: 0 0 0.3rem; color: var(--text); font-size: 1.02rem; font-weight: 750; line-height: 1.25; }
+.panel-subtitle { color: var(--muted); font-size: 0.86rem; margin-bottom: 0.85rem; line-height: 1.5; }
+.panel-card > *:last-child, .surface-card > *:last-child, .insight-card > *:last-child { margin-bottom: 0; }
 .about-stack { display: grid; gap: 1rem; margin-top: 1rem; }
 .about-stack .panel-card,
 .about-stack .surface-card { margin: 0; }
-.section-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 0.95rem; }
+.section-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: var(--gap); }
+
 .stTextInput div[data-baseweb="input"],
 .stTextArea textarea,
 .stFileUploader section,
 .stSelectbox div[data-baseweb="select"],
-.stMultiSelect div[data-baseweb="select"] { background: rgba(11, 23, 41, 0.88) !important; color: var(--text) !important; border: 1px solid rgba(45, 255, 243, 0.42) !important; border-radius: 16px !important; min-height: 48px; box-shadow: 0 0 0 1px rgba(45, 255, 243, 0.04), inset 0 0 0 1px rgba(45, 255, 243, 0.06) !important; }
-.stFileUploader {
-    margin-top: 1rem;
-}
-.stFileUploader section {
-    min-height: 70px !important;
-    padding: 0.7rem 0.85rem !important;
-    display: flex !important;
-    align-items: center !important;
-}
-.stFileUploader section > div {
-    width: 100% !important;
-    display: flex !important;
-    align-items: center !important;
-    gap: 1rem !important;
-    flex-wrap: wrap !important;
-}
-.stFileUploader button {
-    min-height: 46px !important;
-    border-radius: 12px !important;
-}
-.stSelectbox div[data-baseweb="select"] {
-    min-height: 54px !important;
-    align-items: center !important;
-}
-.stSelectbox div[data-baseweb="select"] > div {
-    min-height: 52px !important;
-    align-items: center !important;
-    padding-left: 0.35rem !important;
-}
-.stMultiSelect div[data-baseweb="select"] {
-    min-height: 56px !important;
-    align-items: center !important;
-    overflow: hidden !important;
-}
-.stMultiSelect div[data-baseweb="select"] > div {
-    min-height: 54px !important;
-    align-items: center !important;
-    background: transparent !important;
-    border: 0 !important;
-    box-shadow: none !important;
-}
-.stMultiSelect div[data-baseweb="select"] > div:first-child {
-    padding-left: 0.45rem !important;
-}
+.stMultiSelect div[data-baseweb="select"] { background: rgba(11, 23, 41, 0.88) !important; color: var(--text) !important; border: 1px solid rgba(45, 255, 243, 0.42) !important; border-radius: var(--r-md) !important; min-height: 48px; box-shadow: 0 0 0 1px rgba(45, 255, 243, 0.04), inset 0 0 0 1px rgba(45, 255, 243, 0.06) !important; }
+.stFileUploader { margin-top: 1rem; }
+.stFileUploader section { min-height: 70px !important; padding: 0.7rem 0.85rem !important; display: flex !important; align-items: center !important; }
+.stFileUploader section > div { width: 100% !important; display: flex !important; align-items: center !important; gap: 1rem !important; flex-wrap: wrap !important; }
+.stFileUploader button { min-height: 46px !important; border-radius: 12px !important; }
+.stSelectbox div[data-baseweb="select"] { min-height: 54px !important; align-items: center !important; }
+.stSelectbox div[data-baseweb="select"] > div { min-height: 52px !important; align-items: center !important; padding-left: 0.35rem !important; }
+.stMultiSelect div[data-baseweb="select"] { min-height: 56px !important; align-items: center !important; overflow: hidden !important; }
+.stMultiSelect div[data-baseweb="select"] > div { min-height: 54px !important; align-items: center !important; background: transparent !important; border: 0 !important; box-shadow: none !important; }
+.stMultiSelect div[data-baseweb="select"] > div:first-child { padding-left: 0.45rem !important; }
 .stTextInput { margin-bottom: 0.35rem; }
-.stTextInput div[data-baseweb="input"] {
-    width: 100% !important;
-    height: 54px !important;
-    align-items: center !important;
-}
-.stTextInput input {
-    box-sizing: border-box !important;
-    width: 100% !important;
-    height: 52px !important;
-    line-height: 52px !important;
-    padding: 0 1.4rem !important;
-    border: 0 !important;
-    box-shadow: none !important;
-    background: transparent !important;
-    overflow: hidden !important;
-    text-overflow: clip !important;
-}
+.stTextInput div[data-baseweb="input"] { width: 100% !important; height: 54px !important; align-items: center !important; }
+.stTextInput input { box-sizing: border-box !important; width: 100% !important; height: 52px !important; line-height: 52px !important; padding: 0 1.4rem !important; border: 0 !important; box-shadow: none !important; background: transparent !important; overflow: hidden !important; text-overflow: clip !important; }
 .stTextInput div[data-baseweb="input"]:focus-within,
 .stSelectbox div[data-baseweb="select"]:focus-within,
 .stMultiSelect div[data-baseweb="select"]:focus-within,
 .stTextArea textarea:focus,
-.stDateInput input:focus {
-    border-color: rgba(45, 255, 243, 0.95) !important;
-    box-shadow: 0 0 0 1px rgba(45, 255, 243, 0.75), 0 0 18px rgba(45, 255, 243, 0.16) !important;
-}
-.stTextInput [data-testid="InputInstructions"] {
-    display: none !important;
-}
+.stDateInput input:focus { border-color: rgba(45, 255, 243, 0.95) !important; box-shadow: 0 0 0 1px rgba(45, 255, 243, 0.75), 0 0 18px rgba(45, 255, 243, 0.16) !important; }
+.stTextInput [data-testid="InputInstructions"] { display: none !important; }
 .stSelectbox label p,
 .stMultiSelect label p,
 .stDateInput label p,
 .stSelectbox [data-testid="stWidgetLabel"] p,
 .stMultiSelect [data-testid="stWidgetLabel"] p,
-.stDateInput [data-testid="stWidgetLabel"] p {
-    color: #e8f2ff !important;
-    font-weight: 720 !important;
-}
-.stMultiSelect [data-baseweb="tag"] {
-    background: linear-gradient(90deg, rgba(39, 245, 238, 0.34), rgba(109, 124, 255, 0.24)) !important;
-    border: 1px solid rgba(45, 255, 243, 0.42) !important;
-    border-radius: 8px !important;
-    box-shadow: none !important;
-    min-height: 36px !important;
-    margin-top: 0 !important;
-    margin-bottom: 0 !important;
-}
+.stDateInput [data-testid="stWidgetLabel"] p { color: #e8f2ff !important; font-weight: 720 !important; }
+.stMultiSelect [data-baseweb="tag"] { background: linear-gradient(90deg, rgba(39, 245, 238, 0.34), rgba(109, 124, 255, 0.24)) !important; border: 1px solid rgba(45, 255, 243, 0.42) !important; border-radius: 8px !important; box-shadow: none !important; min-height: 36px !important; margin-top: 0 !important; margin-bottom: 0 !important; }
 .stMultiSelect [data-baseweb="tag"] span,
-.stMultiSelect [data-baseweb="tag"] div {
-    color: #f4fbff !important;
-    font-weight: 760 !important;
-}
-.stMultiSelect [data-baseweb="tag"] svg {
-    color: #eaffff !important;
-    fill: #eaffff !important;
-}
+.stMultiSelect [data-baseweb="tag"] div { color: #f4fbff !important; font-weight: 760 !important; }
+.stMultiSelect [data-baseweb="tag"] svg { color: #eaffff !important; fill: #eaffff !important; }
 .stSelectbox div[data-baseweb="select"] input,
 .stMultiSelect div[data-baseweb="select"] input,
-.stDateInput input {
-    color: #eaf3ff !important;
-}
-.stDateInput input {
-    min-height: 54px !important;
-    border: 1px solid rgba(45, 255, 243, 0.58) !important;
-    border-radius: 14px !important;
-    background: rgba(11, 23, 41, 0.88) !important;
-    box-shadow: inset 0 0 0 1px rgba(45, 255, 243, 0.10) !important;
-    padding: 0 1rem !important;
-}
+.stDateInput input { color: #eaf3ff !important; }
+.stDateInput input { min-height: 54px !important; border: 1px solid rgba(45, 255, 243, 0.58) !important; border-radius: 14px !important; background: rgba(11, 23, 41, 0.88) !important; box-shadow: inset 0 0 0 1px rgba(45, 255, 243, 0.10) !important; padding: 0 1rem !important; }
 .stTextInput input::placeholder,
 .stTextArea textarea::placeholder { color: rgba(142, 167, 198, 0.72) !important; }
 .stButton button,
@@ -417,33 +364,28 @@ div[data-testid="column"] > div, div[data-testid="stColumn"] > div { width: 100%
 .stDownloadButton button:hover { transform: translateY(-1px); filter: brightness(1.03); }
 .stButton button { min-height: 48px; }
 .stDownloadButton button { min-height: 46px; }
-[data-testid="stSidebar"] .stButton button {
-    min-height: 42px !important;
-    border-radius: 12px !important;
-    font-size: 0.9rem !important;
-    box-shadow: 0 10px 20px rgba(39, 245, 238, 0.12) !important;
-}
-.stDataFrame, .stDataEditor { border-radius: 18px; overflow: hidden; }
+[data-testid="stSidebar"] .stButton button { min-height: 42px !important; border-radius: 12px !important; font-size: 0.9rem !important; box-shadow: 0 10px 20px rgba(39, 245, 238, 0.12) !important; }
+.stDataFrame, .stDataEditor { border-radius: var(--r-md); overflow: hidden; }
 table { color: var(--text); }
-.thin-divider { height: 1px; width: 100%; background: linear-gradient(90deg, transparent, rgba(45, 255, 243, 0.22), transparent); margin: 0.75rem 0; }
+.thin-divider { height: 1px; width: 100%; background: linear-gradient(90deg, transparent, rgba(45, 255, 243, 0.22), transparent); margin: 0.85rem 0; }
 .scoreboard { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0.7rem; align-items: stretch; }
-.score-card { background: rgba(11, 22, 40, 0.78); border: 1px solid rgba(45, 255, 243, 0.10); border-radius: 18px; padding: 0.85rem 0.95rem; height: 100%; }
+.score-card { display: flex; flex-direction: column; background: rgba(11, 22, 40, 0.78); border: 1px solid rgba(45, 255, 243, 0.10); border-radius: var(--r-md); padding: 0.9rem 0.95rem; height: 100%; }
 .score-label { color: var(--muted); font-size: 0.73rem; text-transform: uppercase; letter-spacing: 0.12em; font-weight: 800; }
-.score-value { margin-top: 0.35rem; color: var(--text); font-size: 1.1rem; font-weight: 800; }
-.score-meta { margin-top: 0.2rem; color: var(--muted); font-size: 0.82rem; }
+.score-value { margin-top: 0.4rem; color: var(--text); font-size: 1.1rem; font-weight: 800; line-height: 1.15; }
+.score-meta { margin-top: auto; padding-top: 0.25rem; color: var(--muted); font-size: 0.82rem; }
 
 @media (max-width: 1180px) {
     .kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .scoreboard { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .hero-metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 
 @media (max-width: 760px) {
-    .block-container { padding-top: 0.65rem; padding-left: 0.72rem; padding-right: 0.72rem; }
-    .kpi-grid, .scoreboard { grid-template-columns: 1fr; }
-    .hero-card, .panel-card, .insight-card, .empty-card, .surface-card { padding: 0.95rem; }
+    .block-container { padding-top: 0.65rem; padding-left: 0.8rem; padding-right: 0.8rem; }
+    .kpi-grid, .scoreboard, .hero-metrics { grid-template-columns: 1fr; }
+    .hero-card, .panel-card, .insight-card, .empty-card, .surface-card { padding: 1rem; }
     .hero-stack { flex-direction: column; align-items: stretch; }
     .status-row { justify-content: flex-start; }
-    .hero-metrics { grid-template-columns: 1fr; }
     [data-testid="stSidebar"] { position: fixed; inset: 0 auto 0 0; z-index: 1000; width: min(88vw, 320px) !important; min-width: min(88vw, 320px) !important; max-width: min(88vw, 320px) !important; box-shadow: 24px 0 48px rgba(0, 0, 0, 0.32); }
     [data-testid="stSidebar"][aria-expanded="false"] { display: none; }
     .stRadio [role="radiogroup"] > label { padding: 0.68rem 0.72rem; }
@@ -639,19 +581,25 @@ def chart_layout(fig: go.Figure, *, height: int = 360, title: str | None = None,
     return fig
 
 
-def confidence_gauge(confidence: float, title: str = "Model Confidence") -> go.Figure:
-    fig = go.Figure(
-        go.Indicator(
+def dual_gauge(confidence: float, risk: float) -> go.Figure:
+    """Render compact, aligned confidence and risk gauges side by side."""
+    def _indicator(value: float, title: str, domain_x: list[float]) -> go.Indicator:
+        return go.Indicator(
             mode="gauge+number",
-            value=confidence * 100,
-            number={"suffix": "%", "font": {"size": 34, "color": "#eaf3ff"}},
-            title={"text": title, "font": {"color": "#8da4c0", "size": 15}},
+            value=round(value * 100, 1),
+            number={"suffix": "%", "font": {"size": 26, "color": "#eaf3ff"}},
+            title={"text": title, "font": {"color": "#8da4c0", "size": 13}},
+            domain={"x": domain_x, "y": [0, 1]},
             gauge={
-                "axis": {"range": [0, 100], "tickwidth": 1, "tickcolor": "#8da4c0"},
-                "bar": {"color": "#27f5ee"},
+                "axis": {
+                    "range": [0, 100],
+                    "tickwidth": 1,
+                    "tickcolor": "#8da4c0",
+                    "tickfont": {"size": 10, "color": "#8da4c0"},
+                },
+                "bar": {"color": "#27f5ee", "thickness": 0.3},
                 "bgcolor": "rgba(0,0,0,0)",
-                "borderwidth": 1,
-                "bordercolor": "rgba(45,255,243,0.16)",
+                "borderwidth": 0,
                 "steps": [
                     {"range": [0, 50], "color": "rgba(255,77,109,0.18)"},
                     {"range": [50, 75], "color": "rgba(245,158,11,0.16)"},
@@ -659,8 +607,18 @@ def confidence_gauge(confidence: float, title: str = "Model Confidence") -> go.F
                 ],
             },
         )
+
+    fig = go.Figure()
+    fig.add_trace(_indicator(confidence, "Model Confidence", [0.0, 0.46]))
+    fig.add_trace(_indicator(risk, "Risk Meter", [0.54, 1.0]))
+    fig.update_layout(
+        height=250,
+        margin={"l": 20, "r": 20, "t": 46, "b": 12},
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        font={"family": "Inter, Segoe UI, sans-serif", "color": "#eaf3ff"},
     )
-    return chart_layout(fig, height=300)
+    return fig
 
 
 def severity_badge(threat_level: str) -> str:
@@ -900,7 +858,7 @@ def render_executive() -> None:
         st.plotly_chart(chart_layout(trend_fig, height=320), use_container_width=True)
 
 
-def render_real_time(embedded: bool = False) -> None:
+def render_real_time_legacy(embedded: bool = False) -> None:
     if not embedded:
         render_hero(
             "Real-Time URL Detection",
@@ -1021,12 +979,7 @@ def render_real_time(embedded: bool = False) -> None:
                     unsafe_allow_html=True,
                 )
                 st.plotly_chart(
-                    confidence_gauge(confidence_value),
-                    use_container_width=True,
-                    config={"displayModeBar": False, "staticPlot": True},
-                )
-                st.plotly_chart(
-                    confidence_gauge(risk_score, title="Risk Meter"),
+                    dual_gauge(confidence_value, risk_score),
                     use_container_width=True,
                     config={"displayModeBar": False, "staticPlot": True},
                 )
@@ -1069,6 +1022,9 @@ def render_real_time(embedded: bool = False) -> None:
                             color_continuous_scale=[[0, "#27f5ee"], [1, "#8b5cf6"]],
                         )
                         fig.update_layout(coloraxis_showscale=False)
+                        max_score = float(breakdown_df["score"].max() or 1)
+                        fig.update_xaxes(range=[0, max_score * 1.12])
+                        fig.update_layout(bargap=0.28)
                         st.plotly_chart(chart_layout(fig, height=360), use_container_width=True)
                 if contribution_breakdown:
                     contribution_df = pd.DataFrame(contribution_breakdown)
@@ -1083,6 +1039,9 @@ def render_real_time(embedded: bool = False) -> None:
                             color_continuous_scale=[[0, "#27f5ee"], [1, "#ff4d6d"]],
                         )
                         fig.update_layout(coloraxis_showscale=False)
+                        max_impact = float(contribution_df["impact"].max() or 1)
+                        fig.update_xaxes(range=[0, max_impact * 1.12])
+                        fig.update_layout(bargap=0.28)
                         st.plotly_chart(chart_layout(fig, height=340), use_container_width=True)
                 if text_evidence:
                     st.markdown(
@@ -1104,6 +1063,193 @@ def render_real_time(embedded: bool = False) -> None:
             )
 
 
+def render_real_time(embedded: bool = False) -> None:
+    if not embedded:
+        render_hero(
+            "Real-Time URL Detection",
+            "Scan suspicious URLs instantly and surface a structured threat assessment with confidence scoring.",
+            badges=[render_badge("Low latency", "good"), render_badge("Auto triage", "warn")],
+            show_metrics=False,
+        )
+    else:
+        render_section_header("Real-Time URL Detection", "Scan suspicious URLs instantly inside the current dashboard.", anchor_id="url-scanner")
+
+    # ---- Input row: analyst form on the left, quick guidance on the right ----
+    left, right = st.columns([1.1, 0.9], vertical_alignment="top")
+    with left:
+        render_section_header("URL Analyst", "Paste a target URL and run an immediate phishing assessment.", anchor_id="url-scanner")
+        st.selectbox(
+            "Load a sample URL",
+            ["Use a sample URL"] + SAMPLE_PHISHING_URLS,
+            key="phishguard-demo-url",
+            on_change=load_demo_url,
+        )
+        st.markdown("<div style='height:0.5rem'></div>", unsafe_allow_html=True)
+        url = st.text_input(
+            "Target URL",
+            placeholder="https://malicious-example.com/login",
+            label_visibility="visible",
+            key="phishguard-scan-url",
+        )
+        st.markdown("<div style='height:0.5rem'></div>", unsafe_allow_html=True)
+        analyze = st.button("Analyze URL", use_container_width=True, key="phishguard-analyze-url")
+    with right:
+        render_section_header("How scanning works", "Simulated enterprise triage workflow.")
+        st.markdown(
+            "<div class='panel-card'><div class='panel-title'>Analysis pipeline</div>"
+            "<div class='panel-subtitle'>1. Normalize URL &amp; check host reputation.<br>"
+            "2. Inspect phishing indicators &amp; keywords.<br>"
+            "3. Score with the ML model and generate an AI verdict.</div></div>",
+            unsafe_allow_html=True,
+        )
+
+    # ---- Results render FULL WIDTH below the input row ----
+    st.markdown("<div class='thin-divider'></div>", unsafe_allow_html=True)
+    render_section_header("Live Result", "Returned detection state and risk summary.")
+
+    if not analyze:
+        st.markdown(
+            "<div class='empty-card'>Scan a suspicious URL to view threat status, confidence score, risk level, and AI verdict.</div>",
+            unsafe_allow_html=True,
+        )
+        return
+
+    if not url.strip():
+        st.markdown('<div class="empty-card">Paste a URL or load a sample to begin the scan.</div>', unsafe_allow_html=True)
+        return
+
+    progress = st.progress(0, text="Initializing analysis")
+    with st.status("Running security analysis", expanded=True) as status:
+        status.write("Normalizing URL and checking host reputationâ€¦")
+        time.sleep(0.12)
+        progress.progress(33, text="Checking phishing indicators")
+        status.write("Inspecting credential harvesting and redirect patternsâ€¦")
+        time.sleep(0.12)
+        progress.progress(66, text="Generating AI verdict")
+        try:
+            result = client.predict_url(url)
+        except RuntimeError as exc:
+            status.update(label="Model unavailable", state="error")
+            st.error(str(exc))
+            st.info(
+                "If this is Streamlit Cloud, confirm that the latest commit includes "
+                "final_model/model.pkl and final_model/preprocessor.pkl, then reboot the app."
+            )
+            return
+        time.sleep(0.12)
+        progress.progress(100, text="Scan complete")
+        status.update(label="Analysis complete", state="complete")
+    progress.empty()
+
+    threat_status = "Threat Detected" if result.get("prediction", "").lower() != "legitimate" else "No Threat Detected"
+    ai_verdict = "Likely phishing attempt" if threat_status == "Threat Detected" else "Likely safe URL"
+    confidence_value = float(result.get("confidence_score", 0.0))
+    risk_level = result.get("risk_category", "Unknown")
+    reason_codes = result.get("reason_codes", [])
+    heuristic_score = float(result.get("heuristic_score", 0.0) or 0.0)
+    risk_score = float(result.get("risk_score", heuristic_score) or heuristic_score)
+    triggered_indicators = result.get("triggered_indicators", [])
+    suspicious_keywords = result.get("suspicious_keywords", [])
+    explanation = result.get("explanation", "")
+    risk_breakdown = result.get("risk_score_breakdown", {}) or {}
+    contribution_breakdown = result.get("feature_contribution_breakdown", []) or []
+    text_evidence = result.get("text_evidence", {}) or {}
+
+    # Scoreboard â€” full width (auto-fits 5 cards across the page)
+    st.markdown(
+        f"""
+        <div class="panel-card">
+            <div class="scoreboard">
+                <div class="score-card"><div class="score-label">Threat Status</div><div class="score-value">{threat_status}</div><div class="score-meta">Detection state</div></div>
+                <div class="score-card"><div class="score-label">Confidence Score</div><div class="score-value">{format_percentage(confidence_value)}</div><div class="score-meta">Model certainty</div></div>
+                <div class="score-card"><div class="score-label">Risk Level</div><div class="score-value">{risk_level}</div><div class="score-meta">Policy triage bucket</div></div>
+                <div class="score-card"><div class="score-label">AI Verdict</div><div class="score-value">{ai_verdict}</div><div class="score-meta">Assistant conclusion</div></div>
+                <div class="score-card"><div class="score-label">Risk Meter</div><div class="score-value">{format_percentage(risk_score)}</div><div class="score-meta">Hybrid risk score</div></div>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    st.plotly_chart(
+        dual_gauge(confidence_value, risk_score),
+        use_container_width=True,
+        config={"displayModeBar": False, "staticPlot": True},
+    )
+    st.markdown(
+        f"<div class='analysis-time'><span class='pill good'>Analyzed at {format_display_time(result.get('timestamp', ''))}</span></div>",
+        unsafe_allow_html=True,
+    )
+    st.success(f"The platform classified the URL as {result.get('prediction', 'Unknown').lower()} with {format_percentage(confidence_value)} confidence.")
+
+    # Indicators / keywords / explanation â€” two aligned columns
+    info_left, info_right = st.columns(2, vertical_alignment="top")
+    with info_left:
+        if triggered_indicators:
+            st.markdown(
+                "<div class='panel-card'><div class='panel-title'>Triggered Indicators</div><div class='panel-subtitle'>" +
+                " ".join(f'<span class="pill danger">{indicator}</span>' for indicator in triggered_indicators) +
+                "</div></div>",
+                unsafe_allow_html=True,
+            )
+        if suspicious_keywords:
+            st.markdown(
+                "<div class='panel-card'><div class='panel-title'>Suspicious Keywords Found</div><div class='panel-subtitle'>" +
+                ", ".join(suspicious_keywords) +
+                "</div></div>",
+                unsafe_allow_html=True,
+            )
+    with info_right:
+        if explanation:
+            st.markdown(
+                f"<div class='panel-card'><div class='panel-title'>Explanation Panel</div><div class='panel-subtitle'>{explanation}</div></div>",
+                unsafe_allow_html=True,
+            )
+        if text_evidence:
+            st.markdown(
+                f"<div class='panel-card'><div class='panel-title'>TF-IDF Evidence</div><div class='panel-subtitle'>Malicious similarity: {text_evidence.get('malicious_similarity', 0.0):.3f} | Benign similarity: {text_evidence.get('benign_similarity', 0.0):.3f}</div><div class='panel-subtitle'>Top n-grams: {', '.join(text_evidence.get('top_ngrams', [])) or 'None'}</div></div>",
+                unsafe_allow_html=True,
+            )
+
+    # Bar charts â€” side by side, filling the full width
+    chart_left, chart_right = st.columns(2, vertical_alignment="top")
+    with chart_left:
+        if risk_breakdown:
+            breakdown_df = pd.DataFrame(
+                [{"indicator": key, "score": value} for key, value in risk_breakdown.items()]
+            ).sort_values(by="score", ascending=False)
+            if not breakdown_df.empty:
+                fig = px.bar(
+                    breakdown_df.head(10),
+                    x="score", y="indicator", orientation="h",
+                    title="Risk Score Breakdown",
+                    color="score",
+                    color_continuous_scale=[[0, "#27f5ee"], [1, "#8b5cf6"]],
+                )
+                fig.update_layout(coloraxis_showscale=False, bargap=0.28)
+                fig.update_xaxes(range=[0, float(breakdown_df["score"].max() or 1) * 1.12])
+                st.plotly_chart(chart_layout(fig, height=360), use_container_width=True)
+    with chart_right:
+        if contribution_breakdown:
+            contribution_df = pd.DataFrame(contribution_breakdown)
+            if not contribution_df.empty and "impact" in contribution_df.columns:
+                fig = px.bar(
+                    contribution_df.head(8),
+                    x="impact", y="feature", orientation="h",
+                    title="Feature Contribution Breakdown",
+                    color="impact",
+                    color_continuous_scale=[[0, "#27f5ee"], [1, "#ff4d6d"]],
+                )
+                fig.update_layout(coloraxis_showscale=False, bargap=0.28)
+                fig.update_xaxes(range=[0, float(contribution_df["impact"].max() or 1) * 1.12])
+                st.plotly_chart(chart_layout(fig, height=360), use_container_width=True)
+
+    if reason_codes:
+        pretty_reasons = ", ".join(reason_codes)
+        st.markdown(
+            f"<div class='panel-card'><div class='panel-title'>Why it was flagged</div><div class='panel-subtitle'>{pretty_reasons}</div><div class='panel-subtitle'>Heuristic score: {heuristic_score:.2f}</div></div>",
+            unsafe_allow_html=True,
+        )
 def render_threat_analytics(embedded: bool = False) -> None:
     if not embedded:
         render_hero(

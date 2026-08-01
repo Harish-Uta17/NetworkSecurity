@@ -72,6 +72,14 @@ class ModelService:
                 self.settings.model_dir,
             )
 
+        # The serialized preprocessor is the source of truth for the model's
+        # input schema. This also keeps metrics compatible with older builds
+        # that still exposed the legacy 30-feature dashboard schema.
+        fitted_feature_names = getattr(preprocessor, "feature_names_in_", None)
+        if fitted_feature_names is not None:
+            fitted_feature_names = [str(name) for name in fitted_feature_names]
+            feature_names = fitted_feature_names
+
         if latest_artifact_dir:
             test_path = latest_artifact_dir / "data_transformation" / "transformed" / "test.npy"
             if test_path.exists() and model is not None and preprocessor is not None:
