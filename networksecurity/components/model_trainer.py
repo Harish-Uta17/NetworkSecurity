@@ -1,4 +1,5 @@
 import os
+import json
 import sys
 
 from networksecurity.exception.exception import NetworkSecurityException 
@@ -15,7 +16,7 @@ from networksecurity.utils.ml_utils.metric.classification_metric import get_clas
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
 from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import r2_score
+from sklearn.metrics import accuracy_score, confusion_matrix, r2_score
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.ensemble import (
@@ -68,7 +69,8 @@ class ModelTrainer:
             # FIX 1 & 2: Wrapped Logistic Regression in a Pipeline with StandardScaler,
             # removed deprecated n_jobs=-1, and set max_iter=1000 for clean convergence.
             models = {
-                "Random Forest": RandomForestClassifier(n_jobs=-1, verbose=1),
+                # Keep the serialized forest small enough for Streamlit Cloud.
+                "Random Forest": RandomForestClassifier(n_jobs=1, verbose=1),
                 "Decision Tree": DecisionTreeClassifier(),
                 "Gradient Boosting": GradientBoostingClassifier(verbose=1),
                 "Logistic Regression": make_pipeline(
@@ -82,21 +84,25 @@ class ModelTrainer:
             params = {
                 "Decision Tree": {
                     'criterion': ['gini', 'entropy'],
-                    'max_depth': [10, 20, None]
+                    'max_depth': [10, 20],
+                    'min_samples_leaf': [20],
                 },
                 "Random Forest": {
-                    'n_estimators': [32, 64, 128],
-                    'max_depth': [10, 20, None]
+                    'n_estimators': [64],
+                    'max_depth': [20, 25],
+                    'min_samples_leaf': [20],
+                    'max_features': ['sqrt'],
                 },
                 "Gradient Boosting": {
-                    'learning_rate': [0.1, 0.05],
+                    'learning_rate': [0.1],
                     'subsample': [0.8],
-                    'n_estimators': [32, 64, 128]
+                    'n_estimators': [64],
+                    'max_depth': [3],
                 },
                 "Logistic Regression": {},
                 "AdaBoost": {
-                    'learning_rate': [0.1, 0.01],
-                    'n_estimators': [32, 64]
+                    'learning_rate': [0.1],
+                    'n_estimators': [64]
                 }
             }
             
@@ -136,6 +142,18 @@ class ModelTrainer:
             classification_test_metric = get_classification_score(y_true=y_test, y_pred=y_test_pred)
             self.track_mlflow(best_model, classification_test_metric, metric_type="test")
 
+            tn, fp, fn, tp = confusion_matrix(y_test, y_test_pred).ravel()
+            deployment_metrics = {
+                "accuracy": float(accuracy_score(y_test, y_test_pred)),
+                "precision": float(classification_test_metric.precision_score),
+                "recall": float(classification_test_metric.recall_score),
+                "f1_score": float(classification_test_metric.f1_score),
+                "true_negative": float(tn),
+                "false_positive": float(fp),
+                "false_negative": float(fn),
+                "true_positive": float(tp),
+            }
+
             # Load fitted preprocessor pipeline object
             preprocessor = load_object(file_path=self.data_transformation_artifact.transformed_object_file_path)
             
@@ -151,6 +169,8 @@ class ModelTrainer:
             # Save packaged model to final deployment folder
             os.makedirs("final_model", exist_ok=True)
             save_object("final_model/model.pkl", obj=Network_Model)
+            with open("final_model/metrics.json", "w", encoding="utf-8") as metrics_file:
+                json.dump(deployment_metrics, metrics_file, indent=2)
 
             # Construct Model Trainer Artifact
             model_trainer_artifact = ModelTrainerArtifact(

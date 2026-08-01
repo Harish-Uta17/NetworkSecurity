@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timezone
+import json
 import os
 from pathlib import Path
 from typing import Dict, List
@@ -65,6 +66,9 @@ class ModelService:
             else:
                 preprocessor = load_object(str(self.settings.preprocessor_path))
                 model = load_object(str(self.settings.model_path))
+                estimator = getattr(model, "model", model)
+                if hasattr(estimator, "n_jobs"):
+                    estimator.n_jobs = 1
         except Exception as exc:
             load_error = f"{type(exc).__name__}: {exc}"
             logger.exception(
@@ -120,6 +124,16 @@ class ModelService:
                     )
                 except Exception as exc:
                     logger.warning("Failed to compute model metrics: %s", exc)
+
+        # Artifacts/ is intentionally excluded from deployment. Use the
+        # metrics saved beside the model when the test set is unavailable.
+        if not metrics:
+            metrics_path = self.settings.model_dir / "metrics.json"
+            if metrics_path.is_file():
+                try:
+                    metrics = json.loads(metrics_path.read_text(encoding="utf-8"))
+                except Exception as exc:
+                    logger.warning("Failed to load deployment metrics: %s", exc)
 
         return ModelSnapshot(
             model=model,
