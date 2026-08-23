@@ -92,13 +92,33 @@ html, body {
     color: var(--text-primary);
 }
 
+[data-testid="stAppViewContainer"] {
+    display: flex !important;
+    flex: 1 1 auto !important;
+    min-width: 0 !important;
+    width: 100% !important;
+    transition: all 280ms cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+[data-testid="stMain"], [data-testid="stAppViewContainer"] > .main {
+    display: block !important;
+    flex: 1 1 auto !important;
+    min-width: 0 !important;
+    width: 100% !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+    transition: all 280ms cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
 .block-container {
     padding-top: 1.25rem !important;
     padding-bottom: 2.5rem !important;
-    max-width: 1480px !important;
+    max-width: 100% !important;
+    width: 100% !important;
     margin: 0 auto !important;
-    padding-left: clamp(1.2rem, 2.5vw, 2.5rem) !important;
-    padding-right: clamp(1.2rem, 2.5vw, 2.5rem) !important;
+    padding-left: clamp(1.2rem, 2.8vw, 3.2rem) !important;
+    padding-right: clamp(1.2rem, 2.8vw, 3.2rem) !important;
+    transition: padding 280ms ease, max-width 280ms ease, width 280ms ease !important;
 }
 
 /* Hide Default Streamlit Clutter */
@@ -114,16 +134,51 @@ html, body {
     background: transparent !important;
 }
 
+/* Collapsed Sidebar Control Button */
+[data-testid="collapsedControl"] {
+    display: flex !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    z-index: 1002 !important;
+    top: 0.9rem !important;
+    left: 0.9rem !important;
+    transition: all 200ms ease !important;
+}
+
+[data-testid="collapsedControl"] button {
+    background: rgba(14, 26, 46, 0.95) !important;
+    border: 1px solid var(--border-card) !important;
+    border-radius: var(--r-md) !important;
+    color: var(--accent-cyan) !important;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4) !important;
+    min-height: 38px !important;
+    width: 38px !important;
+    padding: 0 !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    transition: all 160ms ease !important;
+}
+
+[data-testid="collapsedControl"] button:hover {
+    border-color: var(--accent-cyan) !important;
+    background: rgba(20, 38, 68, 0.98) !important;
+    transform: scale(1.05) !important;
+    box-shadow: 0 0 16px rgba(0, 229, 255, 0.25) !important;
+}
+
 /* Equal-Height Column Alignment & Flex Grids */
 div[data-testid="stHorizontalBlock"] {
     gap: var(--space-grid) !important;
     align-items: stretch !important;
+    transition: all 280ms cubic-bezier(0.4, 0, 0.2, 1) !important;
 }
 
 div[data-testid="column"], div[data-testid="stColumn"] {
     display: flex !important;
     flex-direction: column !important;
     min-width: 0 !important;
+    transition: all 280ms cubic-bezier(0.4, 0, 0.2, 1) !important;
 }
 
 div[data-testid="column"] > div, div[data-testid="stColumn"] > div {
@@ -145,7 +200,25 @@ div[data-testid="column"] > div, div[data-testid="stColumn"] > div {
     background: linear-gradient(180deg, #091220 0%, #060c16 100%) !important;
     border-right: 1px solid var(--border-card) !important;
     box-shadow: 4px 0 24px rgba(0, 0, 0, 0.45) !important;
-    transition: width 240ms ease, min-width 240ms ease, max-width 240ms ease, transform 240ms ease !important;
+    transition: width 280ms cubic-bezier(0.4, 0, 0.2, 1), min-width 280ms cubic-bezier(0.4, 0, 0.2, 1), max-width 280ms cubic-bezier(0.4, 0, 0.2, 1), transform 280ms cubic-bezier(0.4, 0, 0.2, 1), opacity 280ms ease !important;
+    overflow: hidden !important;
+}
+
+[data-testid="stSidebar"][aria-expanded="false"] {
+    flex: 0 0 0 !important;
+    width: 0 !important;
+    min-width: 0 !important;
+    max-width: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border-right: 0 !important;
+    opacity: 0 !important;
+    transform: translateX(-100%) !important;
+    pointer-events: none !important;
+}
+
+[data-testid="stSidebar"][aria-expanded="false"] > div {
+    display: none !important;
 }
 
 [data-testid="stSidebarContent"] {
@@ -438,7 +511,9 @@ div[data-testid="column"] > div, div[data-testid="stColumn"] > div {
 }
 
 .soc-hero-copy {
-    max-width: 760px;
+    max-width: clamp(760px, 75vw, 1200px);
+    flex: 1 1 auto;
+    transition: max-width 280ms ease;
 }
 
 .soc-eyebrow {
@@ -466,7 +541,8 @@ div[data-testid="column"] > div, div[data-testid="stColumn"] > div {
     color: var(--text-secondary);
     font-size: 1.02rem;
     line-height: 1.55;
-    max-width: 680px;
+    max-width: clamp(680px, 70vw, 1100px);
+    transition: max-width 280ms ease;
 }
 
 .soc-hero-badges {
