@@ -251,6 +251,7 @@ def render_kpi_grid(cards: List[Dict[str, Any]]) -> None:
     """Render standardized, equal-height KPI / Stat Cards with 48px SVG icons."""
     if not cards:
         return
+    st.markdown('<div style="margin-top: 0.5rem; margin-bottom: 0.25rem;"></div>', unsafe_allow_html=True)
     columns = st.columns(len(cards))
     for col, card in zip(columns, cards):
         with col:
@@ -279,6 +280,7 @@ def render_kpi_grid(cards: List[Dict[str, Any]]) -> None:
             </div>
             """
             st.markdown(card_html, unsafe_allow_html=True)
+    st.markdown('<div style="margin-bottom: 0.85rem;"></div>', unsafe_allow_html=True)
 
 
 def render_empty_state(title: str, subtitle: str = "", icon: str = "search") -> None:
@@ -486,6 +488,8 @@ def render_executive() -> None:
         show_features=True,
     )
 
+    st.markdown('<div style="height: 0.85rem;"></div>', unsafe_allow_html=True)
+
     render_kpi_grid(
         [
             {
@@ -524,9 +528,10 @@ def render_executive() -> None:
     )
 
     if history_backend != "mongo":
+        st.markdown('<div style="height: 0.6rem;"></div>', unsafe_allow_html=True)
         st.markdown(
             f"""
-            <div class="soc-panel-card" style="margin-bottom: 1.25rem;">
+            <div class="soc-panel-card" style="margin-top: 0.5rem; margin-bottom: 1.75rem;">
                 <div class="soc-panel-title">
                     {get_svg_icon('database', size=18, color='#f59e0b')}
                     Storage Telemetry Notice

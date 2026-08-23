@@ -631,6 +631,8 @@ div[data-testid="column"] > div, div[data-testid="stColumn"] > div {
     flex-direction: column;
     min-height: 154px;
     height: 100%;
+    margin-top: 0.5rem;
+    margin-bottom: 1.5rem;
     transition: all 180ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
@@ -689,7 +691,7 @@ div[data-testid="column"] > div, div[data-testid="stColumn"] > div {
     align-items: flex-end;
     justify-content: space-between;
     gap: 1rem;
-    margin: 1.5rem 0 0.9rem 0;
+    margin: 2rem 0 1rem 0;
     flex-wrap: wrap;
 }
 
@@ -720,7 +722,8 @@ div[data-testid="column"] > div, div[data-testid="stColumn"] > div {
     display: flex;
     flex-direction: column;
     height: 100%;
-    margin-bottom: var(--space-grid);
+    margin-top: 0.75rem;
+    margin-bottom: 1.75rem;
     transition: border-color 160ms ease, box-shadow 160ms ease;
 }
 
@@ -975,6 +978,11 @@ div[data-testid="column"] > div, div[data-testid="stColumn"] > div {
    ========================================================================== */
 
 /* Buttons */
+.stButton {
+    margin-top: 0.5rem !important;
+    margin-bottom: 1.5rem !important;
+}
+
 .stButton button, .stDownloadButton button {
     background: linear-gradient(135deg, #00d2ff 0%, #3b82f6 100%) !important;
     color: #030a16 !important;
