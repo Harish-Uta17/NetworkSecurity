@@ -44,7 +44,8 @@ mlruns.db
 *.db-journal
 
 # Streamlit & Web Configs
-.streamlit/
+.streamlit/*
+!.streamlit/config.toml
 
 # IDE / Editor Files
 .vscode/
