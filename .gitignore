@@ -31,7 +31,8 @@ wheels/
 # Data Science Artifacts & Log Data (final_model/ is un-ignored so models go to GitHub)
 Artifacts/
 uploads/
-logs/
+logs/*
+!logs/prediction_history.jsonl
 reports/
 
 # MLflow Tracking Data
